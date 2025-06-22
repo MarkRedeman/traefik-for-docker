@@ -1,0 +1,60 @@
+version: '3.9'
+
+services:
+  traefik:
+    image: traefik:v3.4.1@sha256:cd40ab7bc1f047731d5b22595203812343efcb6538014c4e93221cfc3a77217a
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - traefik-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    command:
+      - "--log.level=INFO"
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      # EntryPoints
+      - "--entrypoints.http.address=:80"
+      - "--entrypoints.http.http.redirections.entrypoint.to=https"
+      - "--entrypoints.http.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.https.address=:443"
+      - "--entrypoints.https.http.tls.certresolver=le"
+
+      # Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+
+      # Let's Encrypt Resolver
+      - "--certificatesresolvers.le.acme.email=admin@hello-world.com"
+      - "--certificatesresolvers.le.acme.storage=/data/acme.json"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=http"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./data:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`${DASHBOARD_HOST}`)"
+      - "traefik.http.routers.traefik.entrypoints=https"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=auth"
+      # Note: double $$ needed to escape $ in Compose YAML
+      - "traefik.http.middlewares.auth.basicauth.users=${BASIC_AUTH_USER}:$$BASIC_AUTH_PASS"
+
+  # Use to quickly test your configuration
+  # nginx:
+  #   image: nginx:alpine
+  #   restart: unless-stopped
+  #   networks:
+  #     - traefik-proxy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.nginx.rule=Host(`nginx.example.com`)"
+  #     - "traefik.http.routers.nginx.entrypoints=https"
+
+networks:
+  traefik-proxy:
+    external: true
